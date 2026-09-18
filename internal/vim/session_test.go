@@ -53,6 +53,9 @@ func TestNewChallengePanicsWithoutOptimal(t *testing.T) {
 }
 
 func TestSessionSolvePath(t *testing.T) {
+	if !nvimAvailable() {
+		t.Skip("nvim not installed")
+	}
 	c := NewChallenge("delete word", []string{"the quick fox"}, Pos{0, 4}, Easy,
 		Goal{Lines: []string{"the  fox"}}, "diw")
 	start := time.Unix(0, 0)
@@ -61,13 +64,13 @@ func TestSessionSolvePath(t *testing.T) {
 		t.Fatalf("NewSession: %v", err)
 	}
 
-	if got := s.Type("d", start); got.Solved {
+	if got := typeSettled(t, s, "d", start); got.Solved {
 		t.Fatalf("after 'd' = %+v, want not solved", got)
 	}
-	if got := s.Type("i", start); got.Solved {
+	if got := typeSettled(t, s, "i", start); got.Solved {
 		t.Fatalf("after 'i' = %+v", got)
 	}
-	solved := s.Type("w", start.Add(2*time.Second))
+	solved := typeSettled(t, s, "w", start.Add(2*time.Second))
 	if !solved.Solved {
 		t.Fatalf("after 'w' = %+v, want solved", solved)
 	}
@@ -87,6 +90,9 @@ func TestSessionSolvePath(t *testing.T) {
 }
 
 func TestSessionCountsBeepsAsMistakes(t *testing.T) {
+	if !nvimAvailable() {
+		t.Skip("nvim not installed")
+	}
 	c := NewChallenge("delete char", []string{"caat"}, Pos{0, 0}, Easy,
 		Goal{Lines: []string{"cat"}}, "x")
 	start := time.Unix(0, 0)
@@ -96,20 +102,23 @@ func TestSessionCountsBeepsAsMistakes(t *testing.T) {
 	}
 
 	// 'h' at column 0 is a no-op: it should beep and count as a mistake.
-	if got := s.Type("h", start); got.Accepted {
+	if got := typeSettled(t, s, "h", start); got.Accepted {
 		t.Fatalf("'h' at col 0 should beep, got %+v", got)
 	}
 	if s.Mistakes() != 1 {
 		t.Fatalf("mistakes = %d, want 1", s.Mistakes())
 	}
 	// A beep must not stall the real solution.
-	s.Type("l", start) // move onto the extra 'a'
-	if out := s.Type("x", start); !out.Solved {
+	typeSettled(t, s, "l", start) // move onto the extra 'a'
+	if out := typeSettled(t, s, "x", start); !out.Solved {
 		t.Fatalf("valid path after beep failed: %+v", out)
 	}
 }
 
 func TestSessionSkipCountsAsUnsolved(t *testing.T) {
+	if !nvimAvailable() {
+		t.Skip("nvim not installed")
+	}
 	challenges := []Challenge{
 		NewChallenge("a", []string{"xy"}, Pos{0, 0}, Easy, Goal{Lines: []string{"y"}}, "x"),
 		NewChallenge("b", []string{"xy"}, Pos{0, 0}, Easy, Goal{Lines: []string{"y"}}, "x"),
@@ -120,7 +129,7 @@ func TestSessionSkipCountsAsUnsolved(t *testing.T) {
 		t.Fatalf("NewSession: %v", err)
 	}
 	s.Skip(start.Add(time.Second))
-	s.Type("x", start.Add(2*time.Second))
+	typeSettled(t, s, "x", start.Add(2*time.Second))
 	report := s.Report()
 	if report.Solved != 1 {
 		t.Fatalf("solved = %d, want 1", report.Solved)
@@ -151,9 +160,13 @@ func TestSpeedBonusRewardsFastSolves(t *testing.T) {
 }
 
 // TestLibraryIntegrity is the key validation gate: for every challenge, feeding
-// its authored optimal solution into a fresh emulator must reach the goal. This
-// validates both the emulator and the authored solutions at once.
+// its authored optimal solution into a real embedded Neovim must reach the
+// goal. This validates both the authored solutions and the buffer/cursor
+// bounds at once. Skipped when nvim isn't installed.
 func TestLibraryIntegrity(t *testing.T) {
+	if !nvimAvailable() {
+		t.Skip("nvim not installed")
+	}
 	for _, c := range Library() {
 		if len(c.Buffer) == 0 {
 			t.Errorf("%q: empty buffer", c.Task)
@@ -165,13 +178,17 @@ func TestLibraryIntegrity(t *testing.T) {
 		if line := []rune(c.Buffer[c.Cursor.Row]); c.Cursor.Col < 0 || c.Cursor.Col > len(line) {
 			t.Errorf("%q: cursor col %d out of range", c.Task, c.Cursor.Col)
 		}
-		ed := c.NewEditor()
-		for _, tok := range Tokenize(c.Hint()) {
-			ed.Feed(tok)
+		e, err := newNvimEngine(c.Buffer, c.Cursor)
+		if err != nil {
+			t.Fatalf("start nvim: %v", err)
 		}
-		if !ed.Matches(c.Goal) {
+		feedNvim(t, e, Tokenize(c.Hint()))
+		ok := e.Matches(c.Goal)
+		gotLines, gotCur, gotMode := e.Lines(), e.Cursor(), e.ModeLabel()
+		e.Close()
+		if !ok {
 			t.Errorf("%q: optimal %q did not reach goal. got lines=%q cursor=%+v mode=%v",
-				c.Task, c.Hint(), ed.Lines(), ed.Cursor(), ed.ModeLabel())
+				c.Task, c.Hint(), gotLines, gotCur, gotMode)
 		}
 	}
 }
