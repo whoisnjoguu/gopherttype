@@ -1,6 +1,6 @@
 module github.com/mkhamat/gopherttype
 
-go 1.26.2
+go 1.27.1
 
 require (
 	charm.land/bubbletea/v2 v2.0.9
@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/harmonica v0.2.0
 	github.com/charmbracelet/x/ansi v0.11.8
 	github.com/charmbracelet/x/term v0.2.2
+	github.com/neovim/go-client v1.2.1
 	github.com/rivo/uniseg v0.4.7
 )
 
