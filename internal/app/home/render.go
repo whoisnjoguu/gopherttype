@@ -8,45 +8,49 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mkhamat/gopherttype/internal/app/ui"
-	"github.com/mkhamat/gopherttype/internal/engine"
 )
 
 func (m *Model) modeIndex() int {
-	if m.settings.mode == engine.ModeWords {
-		return 1
-	}
-	return 0
+	return int(m.settings.mode)
 }
 
 func (m *Model) lengthRow() ([]string, int) {
-	if m.settings.mode == engine.ModeTime {
+	switch m.settings.mode {
+	case modeTime:
 		options := make([]string, len(durationPresets))
 		for i, duration := range durationPresets {
 			options[i] = fmt.Sprintf("%.0fs", duration.Seconds())
 		}
 		return options, m.settings.durationIndex
+	case modeVim:
+		options := make([]string, len(vimPresets))
+		for i, difficulty := range vimPresets {
+			options[i] = difficulty.Label()
+		}
+		return options, m.settings.vimIndex
+	default:
+		options := make([]string, len(wordPresets))
+		for i, count := range wordPresets {
+			options[i] = fmt.Sprint(count)
+		}
+		return options, m.settings.wordIndex
 	}
-	options := make([]string, len(wordPresets))
-	for i, count := range wordPresets {
-		options[i] = fmt.Sprint(count)
-	}
-	return options, m.settings.wordIndex
 }
 
 // The mascot follows length horizontally and mode vertically.
 func (m *Model) renderContent() (string, ui.Point) {
 	title := m.styles.Accent.Render("gopherttype")
-	mode := padRight(m.renderOptions([]string{"time", "words"}, m.modeIndex()))
+	mode := padRight(m.renderOptions([]string{"time", "words", "vim"}, m.modeIndex()))
 	lengthOptions, lengthIndex := m.lengthRow()
 	length, selectedX := m.renderTrack(lengthOptions, lengthIndex)
 	begin := m.styles.Accent.Render("enter") + m.styles.Muted.Render(" to begin")
 	hints := m.styles.Accent.Render("↑↓") + m.styles.Muted.Render(" mode ") +
-		m.styles.Accent.Render("←→") + m.styles.Muted.Render(" length ") +
+		m.styles.Accent.Render("←→") + m.styles.Muted.Render(" option ") +
 		m.styles.Accent.Render("q") + m.styles.Muted.Render(" quit")
 	lines := []string{title, ""}
 	selectedY := float64(len(lines)+m.modeIndex()) + 0.5
 	lines = append(lines, mode...)
-	lines = append(lines, "", length, "", begin, "", hints)
+	lines = append(lines, "", length, "", begin, hints)
 	content := strings.Join(centerLines(lines), "\n")
 	selectedX += float64((lipgloss.Width(content) - lipgloss.Width(length)) / 2)
 	return content, ui.Point{X: selectedX, Y: selectedY}

@@ -32,3 +32,11 @@ func (g *Generator) Generate(count int) []string {
 
 	return words
 }
+
+// List returns a copy of the full embedded word list
+func List() []string {
+	words := strings.Fields(wordList)
+	out := make([]string, len(words))
+	copy(out, words)
+	return out
+}

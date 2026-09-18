@@ -8,7 +8,10 @@ import (
 	"github.com/mkhamat/gopherttype/internal/app/home"
 	"github.com/mkhamat/gopherttype/internal/app/play"
 	"github.com/mkhamat/gopherttype/internal/app/results"
+	"github.com/mkhamat/gopherttype/internal/app/vimplay"
+	"github.com/mkhamat/gopherttype/internal/app/vimresults"
 	"github.com/mkhamat/gopherttype/internal/engine"
+	"github.com/mkhamat/gopherttype/internal/vim"
 	"github.com/mkhamat/gopherttype/internal/words"
 )
 
@@ -19,17 +22,20 @@ type screen interface {
 }
 
 type Model struct {
-	active      screen
-	roundConfig engine.Config
-	generator   *words.Generator
-	size        tea.WindowSizeMsg
-	background  *tea.BackgroundColorMsg
+	active        screen
+	roundConfig   engine.Config
+	vimDifficulty vim.Difficulty
+	generator     *words.Generator
+	rng           *rand.Rand
+	size          tea.WindowSizeMsg
+	background    *tea.BackgroundColorMsg
 }
 
 func New() *Model {
 	return &Model{
 		active:    home.New(),
 		generator: words.New(rand.Uint64(), rand.Uint64()),
+		rng:       rand.New(rand.NewPCG(rand.Uint64(), rand.Uint64())),
 	}
 }
 
@@ -50,14 +56,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case home.StartMsg:
 		m.roundConfig = msg.Config
 		return m, m.switchScreen(play.New(m.roundConfig, m.generator.Generate))
+	case home.StartVimMsg:
+		m.vimDifficulty = msg.Difficulty
+		return m, m.switchScreen(vimplay.New(m.vimDifficulty, m.selectVim()))
 	case play.FinishedMsg:
 		return m, m.switchScreen(results.New(msg.Metrics))
-	case play.HomeMsg, results.HomeMsg:
+	case vimplay.FinishedMsg:
+		return m, m.switchScreen(vimresults.New(msg.Report))
+	case play.HomeMsg, results.HomeMsg, vimplay.HomeMsg, vimresults.HomeMsg:
 		return m, m.switchScreen(home.New())
 	case results.RetryMsg:
 		return m, m.switchScreen(play.New(m.roundConfig, m.generator.Generate))
+	case vimresults.RetryMsg:
+		return m, m.switchScreen(vimplay.New(m.vimDifficulty, m.selectVim()))
 	}
 	return m, m.active.Update(msg)
+}
+
+// selectVim builds a fresh, procedurally generated round for the difficulty.
+func (m *Model) selectVim() []vim.Challenge {
+	return vim.Round(m.vimDifficulty, vim.RoundSize, m.rng)
 }
 
 func (m *Model) View() tea.View {

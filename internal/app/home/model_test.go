@@ -10,6 +10,7 @@ import (
 	"github.com/mkhamat/gopherttype/internal/app/mascot"
 	"github.com/mkhamat/gopherttype/internal/app/ui"
 	"github.com/mkhamat/gopherttype/internal/engine"
+	"github.com/mkhamat/gopherttype/internal/vim"
 )
 
 func key(code rune) tea.KeyPressMsg {
@@ -67,17 +68,19 @@ func TestHomeFrameBypassesSettings(t *testing.T) {
 func TestHomeKeysChangeSelection(t *testing.T) {
 	for _, keys := range [][4]rune{{tea.KeyUp, tea.KeyDown, tea.KeyLeft, tea.KeyRight}, {'k', 'j', 'h', 'l'}} {
 		m := New()
-		if m.settings.mode != engine.ModeTime {
+		if m.settings.mode != modeTime {
 			t.Fatal("default must be time mode")
 		}
+		down, left, right := keys[1], keys[2], keys[3]
 		for _, tc := range []struct {
 			key  rune
 			want settings
 		}{
-			{keys[0], settings{mode: engine.ModeWords}},
-			{keys[1], settings{mode: engine.ModeTime}},
-			{keys[2], settings{mode: engine.ModeTime, durationIndex: 3}},
-			{keys[3], settings{mode: engine.ModeTime}},
+			{down, settings{mode: modeWords}},
+			{down, settings{mode: modeVim}},
+			{down, settings{mode: modeTime}}, // wraps through the three modes
+			{left, settings{mode: modeTime, durationIndex: 3}},
+			{right, settings{mode: modeTime}},
 		} {
 			m.Update(key(tc.key))
 			if m.settings != tc.want {
@@ -95,8 +98,8 @@ func TestHomeStartUsesIndependentLengths(t *testing.T) {
 	}{
 		{nil, engine.Config{Mode: engine.ModeTime, Duration: 15 * time.Second}},
 		{[]rune{tea.KeyRight, tea.KeyRight}, engine.Config{Mode: engine.ModeTime, Duration: 60 * time.Second}},
-		{[]rune{tea.KeyUp, tea.KeyRight}, engine.Config{Mode: engine.ModeWords, WordCount: 25}},
-		{[]rune{tea.KeyDown}, engine.Config{Mode: engine.ModeTime, Duration: 60 * time.Second}},
+		{[]rune{tea.KeyDown, tea.KeyRight}, engine.Config{Mode: engine.ModeWords, WordCount: 25}},
+		{[]rune{tea.KeyDown, tea.KeyDown}, engine.Config{Mode: engine.ModeTime, Duration: 60 * time.Second}},
 	} {
 		for _, code := range tc.keys {
 			m.Update(key(code))
@@ -109,5 +112,29 @@ func TestHomeStartUsesIndependentLengths(t *testing.T) {
 		if !ok || msg.Config != tc.want {
 			t.Errorf("start = %+v, want %+v", msg, tc.want)
 		}
+	}
+}
+
+func TestHomeStartsVimRound(t *testing.T) {
+	m := New()
+	m.Update(key(tea.KeyDown)) // time -> words
+	m.Update(key(tea.KeyDown)) // words -> vim
+
+	cmd := m.Update(key(tea.KeyEnter))
+	if cmd == nil {
+		t.Fatal("Enter in vim mode must return a command")
+	}
+	msg, ok := cmd().(StartVimMsg)
+	if !ok {
+		t.Fatalf("vim mode Enter = %T, want StartVimMsg", cmd())
+	}
+	if msg.Difficulty != vim.Easy {
+		t.Errorf("default vim difficulty = %v, want easy", msg.Difficulty)
+	}
+
+	m.Update(key(tea.KeyRight)) // easy -> medium
+	cmd = m.Update(key(tea.KeyEnter))
+	if msg, ok := cmd().(StartVimMsg); !ok || msg.Difficulty != vim.Medium {
+		t.Errorf("stepped vim difficulty = %+v, want medium", msg)
 	}
 }
