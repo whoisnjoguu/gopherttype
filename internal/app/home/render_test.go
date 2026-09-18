@@ -8,14 +8,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 
 	"github.com/mkhamat/gopherttype/internal/app/ui"
-	"github.com/mkhamat/gopherttype/internal/engine"
 )
 
 func TestRenderContentLayout(t *testing.T) {
 	m := New()
 	content, _ := m.renderContent()
 	rows := strings.Split(ansi.Strip(content), "\n")
-	want := []string{"gopherttype", "", "time", "words", "", "15s  30s  60s  120s", "", "enter to begin", "", "↑↓ mode ←→ length q quit"}
+	want := []string{"gopherttype", "", "time", "words", "vim", "", "15s  30s  60s  120s", "", "enter to begin", "↑↓ mode ←→ option q quit"}
 	if len(rows) != len(want) {
 		t.Fatalf("content rows = %d, want %d", len(rows), len(want))
 	}
@@ -44,18 +43,18 @@ func TestViewReturnsCachedComposite(t *testing.T) {
 func TestSelectedPointMatchesRenderedOptions(t *testing.T) {
 	for _, tc := range []struct {
 		token                string
-		mode                 engine.Mode
+		mode                 mode
 		index, width, height int
 		dark                 bool
 	}{
-		{"15s", engine.ModeTime, 0, 80, 24, true},
-		{"30s", engine.ModeTime, 1, 32, 24, false},
-		{"60s", engine.ModeTime, 2, 33, 25, true},
-		{"120s", engine.ModeTime, 3, 81, 40, false},
-		{"10", engine.ModeWords, 0, 81, 40, false},
-		{"25", engine.ModeWords, 1, 33, 25, true},
-		{"50", engine.ModeWords, 2, 32, 24, false},
-		{"100", engine.ModeWords, 3, 80, 24, true},
+		{"15s", modeTime, 0, 80, 24, true},
+		{"30s", modeTime, 1, 32, 24, false},
+		{"60s", modeTime, 2, 33, 25, true},
+		{"120s", modeTime, 3, 81, 40, false},
+		{"10", modeWords, 0, 81, 40, false},
+		{"25", modeWords, 1, 33, 25, true},
+		{"50", modeWords, 2, 32, 24, false},
+		{"100", modeWords, 3, 80, 24, true},
 	} {
 		t.Run(tc.token, func(t *testing.T) {
 			m := New()
@@ -66,7 +65,7 @@ func TestSelectedPointMatchesRenderedOptions(t *testing.T) {
 			var want ui.Point
 			foundX, foundY := false, false
 			mode := "time"
-			if tc.mode == engine.ModeWords {
+			if tc.mode == modeWords {
 				mode = "words"
 			}
 			for y, row := range rows {
