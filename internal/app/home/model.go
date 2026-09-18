@@ -9,47 +9,70 @@ import (
 	"github.com/mkhamat/gopherttype/internal/app/mascot"
 	"github.com/mkhamat/gopherttype/internal/app/ui"
 	"github.com/mkhamat/gopherttype/internal/engine"
+	"github.com/mkhamat/gopherttype/internal/vim"
 )
 
 var (
 	wordPresets     = [...]int{10, 25, 50, 100}
 	durationPresets = [...]time.Duration{15 * time.Second, 30 * time.Second, 60 * time.Second, 120 * time.Second}
+	vimPresets      = [...]vim.Difficulty{vim.Easy, vim.Medium, vim.Hard, vim.Mixed}
 )
 
+// mode is the home selection axis
+type mode int
+
+const (
+	modeTime mode = iota
+	modeWords
+	modeVim
+)
+
+var modeOrder = [...]mode{modeTime, modeWords, modeVim}
+
 type settings struct {
-	mode          engine.Mode
+	mode          mode
 	wordIndex     int
 	durationIndex int
+	vimIndex      int
 }
 
 func (s settings) config() engine.Config {
-	if s.mode == engine.ModeTime {
-		return engine.Config{Mode: s.mode, Duration: durationPresets[s.durationIndex]}
+	if s.mode == modeWords {
+		return engine.Config{Mode: engine.ModeWords, WordCount: wordPresets[s.wordIndex]}
 	}
-	return engine.Config{Mode: s.mode, WordCount: wordPresets[s.wordIndex]}
+	return engine.Config{Mode: engine.ModeTime, Duration: durationPresets[s.durationIndex]}
 }
 
-func (m *Model) toggleMode() {
-	if m.settings.mode == engine.ModeTime {
-		m.settings.mode = engine.ModeWords
-		return
-	}
-	m.settings.mode = engine.ModeTime
+func (s settings) difficulty() vim.Difficulty {
+	return vimPresets[s.vimIndex]
+}
+
+// stepMode moves the selected mode by delta, wrapping through the mode list.
+func (m *Model) stepMode(delta int) {
+	index := wrapIndex(int(m.settings.mode)+delta, len(modeOrder))
+	m.settings.mode = modeOrder[index]
 }
 
 func (m *Model) stepLength(delta int) {
-	if m.settings.mode == engine.ModeTime {
+	switch m.settings.mode {
+	case modeTime:
 		m.settings.durationIndex = wrapIndex(m.settings.durationIndex+delta, len(durationPresets))
-		return
+	case modeWords:
+		m.settings.wordIndex = wrapIndex(m.settings.wordIndex+delta, len(wordPresets))
+	case modeVim:
+		m.settings.vimIndex = wrapIndex(m.settings.vimIndex+delta, len(vimPresets))
 	}
-	m.settings.wordIndex = wrapIndex(m.settings.wordIndex+delta, len(wordPresets))
 }
 
 func wrapIndex(index, length int) int {
 	return ((index % length) + length) % length
 }
 
+// StartMsg begins a typing round.
 type StartMsg struct{ Config engine.Config }
+
+// StartVimMsg begins a Vim challenge round.
+type StartVimMsg struct{ Difficulty vim.Difficulty }
 
 type Model struct {
 	settings      settings
@@ -66,7 +89,7 @@ type Model struct {
 
 func New() *Model {
 	m := &Model{
-		settings: settings{mode: engine.ModeTime},
+		settings: settings{mode: modeTime},
 		styles:   ui.StylesFor(true),
 		mascot:   mascot.New(),
 	}
@@ -99,10 +122,16 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		case "q":
 			return tea.Quit
 		case "enter":
+			if m.settings.mode == modeVim {
+				difficulty := m.settings.difficulty()
+				return func() tea.Msg { return StartVimMsg{Difficulty: difficulty} }
+			}
 			config := m.settings.config()
 			return func() tea.Msg { return StartMsg{Config: config} }
-		case "up", "down", "k", "j":
-			m.toggleMode()
+		case "up", "k":
+			m.stepMode(-1)
+		case "down", "j":
+			m.stepMode(1)
 		case "left", "h":
 			m.stepLength(-1)
 		case "right", "l":
