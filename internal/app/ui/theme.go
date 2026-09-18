@@ -17,6 +17,7 @@ type Styles struct {
 	Extra      lipgloss.Style
 	Pending    lipgloss.Style
 	Cursor     lipgloss.Style
+	Selection  lipgloss.Style
 	Track      lipgloss.Style
 }
 
@@ -43,10 +44,12 @@ func newStyles(dark bool) *Styles {
 	text, muted, accent := "#24292f", "#57606a", "#006d77"
 	warning, incorrect, background := "#805500", "#b42318", "#ffffff"
 	track := "#eef1f4"
+	selection := "#b7e4e9"
 	if dark {
 		text, muted, accent = "#e6edf3", "#9da7b3", "#67d9e5"
 		warning, incorrect, background = "#eac45c", "#ff8080", "#161b22"
 		track = "#202830"
+		selection = "#2b4d54"
 	}
 	fg := func(color string) lipgloss.Style {
 		return lipgloss.NewStyle().Foreground(lipgloss.Color(color))
@@ -62,6 +65,7 @@ func newStyles(dark bool) *Styles {
 		Extra:      fg(incorrect).Faint(true),
 		Pending:    fg(muted),
 		Cursor:     fg(background).Background(lipgloss.Color(accent)),
+		Selection:  fg(text).Background(lipgloss.Color(selection)),
 		Track:      lipgloss.NewStyle().Background(lipgloss.Color(track)),
 	}
 }
